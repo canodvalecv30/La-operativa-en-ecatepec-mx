@@ -1,0 +1,6 @@
+{
+  "name": "Apex Drive 3D",
+  "description": "Videojuego de conducción y carreras en 3D con simulación de físicas reales, derrapes, garaje con coches deportivos personalizables, tráfico y múltiples modos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
