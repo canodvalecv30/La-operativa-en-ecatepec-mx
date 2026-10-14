@@ -10,6 +10,9 @@ class CharacterPhysics {
     var velocityY = 0f
     var headingAngle = 0f
     var walkPhase = 0f
+    var idlePhase = 0f
+    var torsoPitch = 0f
+    var headTurn = 0f
 
     var isMoving = false
     var isSprinting = false
@@ -45,6 +48,8 @@ class CharacterPhysics {
         isSprinting = sprint
         val inputMag = sqrt(inputX * inputX + inputZ * inputZ)
 
+        idlePhase = (idlePhase + 2.5f * dt) % (2.0 * Math.PI).toFloat()
+
         if (inputMag > 0.15f) {
             isMoving = true
             val speed = if (sprint) sprintSpeed else walkSpeed
@@ -54,7 +59,13 @@ class CharacterPhysics {
             // Target heading from movement vector
             val targetAngle = Math.toDegrees(atan2(normX.toDouble(), normZ.toDouble())).toFloat()
             // Smoothly rotate character toward movement
-            headingAngle += (targetAngle - headingAngle) * min(1f, 12f * dt)
+            val angleDiff = (targetAngle - headingAngle)
+            headingAngle += angleDiff * min(1f, 12f * dt)
+            headTurn += ((angleDiff * 0.35f).coerceIn(-25f, 25f) - headTurn) * min(1f, 8f * dt)
+
+            // Dynamic forward pitch when running / sprinting
+            val targetPitch = if (sprint) 14f else 5f
+            torsoPitch += (targetPitch - torsoPitch) * min(1f, 9f * dt)
 
             // Displace in world
             posX += normX * speed * dt
@@ -65,8 +76,10 @@ class CharacterPhysics {
             walkPhase = (walkPhase + cadence * dt) % (2.0 * Math.PI).toFloat()
         } else {
             isMoving = false
-            // Relax walk cycle towards 0
+            // Relax walk cycle and pitch towards 0
             walkPhase += (0f - walkPhase) * min(1f, 10f * dt)
+            torsoPitch += (0f - torsoPitch) * min(1f, 8f * dt)
+            headTurn += (0f - headTurn) * min(1f, 8f * dt)
         }
 
         // Gravity & Jump physics

@@ -52,6 +52,18 @@ fun GarageScreen(
     var selectedColor by remember(selectedCarIndex) {
         mutableLongStateOf(prefs.getCarColor(currentCarSpec.id, currentCarSpec.defaultColorHex))
     }
+    var selectedDecal by remember(selectedCarIndex) {
+        mutableStateOf(prefs.getCarDecal(currentCarSpec.id))
+    }
+    var selectedDecalColor by remember(selectedCarIndex) {
+        mutableLongStateOf(prefs.getCarDecalColor(currentCarSpec.id))
+    }
+    var selectedRimColor by remember(selectedCarIndex) {
+        mutableLongStateOf(prefs.getCarRimColor(currentCarSpec.id))
+    }
+    var selectedCaliperColor by remember(selectedCarIndex) {
+        mutableLongStateOf(prefs.getCarCaliperColor(currentCarSpec.id))
+    }
 
     var engineLevel by remember(selectedCarIndex) {
         mutableIntStateOf(prefs.getUpgradeLevel(currentCarSpec.id, "engine"))
@@ -77,19 +89,27 @@ fun GarageScreen(
     }
     val dummyWorld = remember { TrackWorld(GameMode.FREE_ROAM) }
 
+    var showPilotInGarage by remember { mutableStateOf(false) }
+
     val garageRenderer = remember(selectedCarIndex) {
         GameRenderer(
             getCarPhysics = { dummyPhysics },
             getTrackWorld = { dummyWorld },
             getCarColorHex = { selectedColor },
+            getCarDecal = { selectedDecal },
+            getCarDecalColor = { selectedDecalColor },
+            getCarRimColor = { selectedRimColor },
+            getCarCaliperColor = { selectedCaliperColor },
+            getCharacterSkin = { prefs.characterSkin },
             isGarageMode = true
         ).apply {
             cameraMode = CameraMode.ORBIT_GARAGE
             garageOrbitAngle = 40f
+            showCharacterInGarage = showPilotInGarage
         }
     }
 
-    var activeTab by remember { mutableIntStateOf(0) } // 0 = Info/Stats, 1 = Pintura, 2 = Mejoras
+    var activeTab by remember { mutableIntStateOf(0) } // 0 = Info/Stats, 1 = Personalizar (Colores & Decals), 2 = Mejoras
 
     Column(
         modifier = modifier
@@ -190,20 +210,54 @@ fun GarageScreen(
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0x99000000),
+                    Row(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = 6.dp)
+                            .padding(bottom = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0x99000000)
                         ) {
-                            Icon(Icons.Default.TouchApp, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Arrastra 360°", color = Color.LightGray, fontSize = 10.sp)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Icon(Icons.Default.TouchApp, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Gira 360°", color = Color.LightGray, fontSize = 10.sp)
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (showPilotInGarage) Color(0xFF00E5FF) else Color(0x99000000),
+                            modifier = Modifier
+                                .clickable {
+                                    showPilotInGarage = !showPilotInGarage
+                                    garageRenderer.showCharacterInGarage = showPilotInGarage
+                                }
+                                .testTag("garage_toggle_pilot_button")
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Person,
+                                    contentDescription = "Piloto 3D",
+                                    tint = if (showPilotInGarage) Color.Black else Color.White,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    if (showPilotInGarage) "Piloto Activo" else "Ver Piloto 3D",
+                                    color = if (showPilotInGarage) Color.Black else Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp
+                                )
+                            }
                         }
                     }
                 }
@@ -330,7 +384,7 @@ fun GarageScreen(
                     Tab(
                         selected = activeTab == 1,
                         onClick = { activeTab = 1 },
-                        text = { Text("Pintura", fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+                        text = { Text("Personalizar", fontWeight = FontWeight.Bold, fontSize = 12.sp) }
                     )
                     Tab(
                         selected = activeTab == 2,
@@ -362,47 +416,25 @@ fun GarageScreen(
                             StatBar(label = "Frenada Deportiva", value = (currentCarSpec.baseBraking + (brakesLevel - 1) * 2f) / 14f, display = "Nivel $brakesLevel", color = Color(0xFF76FF03))
                         }
 
-                        1 -> { // Paint
-                            Text(
-                                text = "Elige el color de la carrocería metálica:",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
+                        1 -> { // Personalización: Pintura, Acabados, Vinilos/Decals y Llantas
+                            CarCustomizerPanel(
+                                carSpec = currentCarSpec,
+                                prefs = prefs,
+                                onColorChanged = { newColor ->
+                                    selectedColor = newColor
+                                },
+                                onDecalChanged = { decal, decalColor ->
+                                    selectedDecal = decal
+                                    selectedDecalColor = decalColor
+                                },
+                                onWheelCustomized = { rimColor, caliperColor ->
+                                    selectedRimColor = rimColor
+                                    selectedCaliperColor = caliperColor
+                                },
+                                onCoinsUpdated = { updatedCoins ->
+                                    currentCoins = updatedCoins
+                                }
                             )
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                CarCatalog.PRESET_COLORS.take(4).forEach { (colorHex, name) ->
-                                    PaintChip(
-                                        colorHex = colorHex,
-                                        name = name,
-                                        isSelected = selectedColor == colorHex,
-                                        onClick = {
-                                            selectedColor = colorHex
-                                            prefs.setCarColor(currentCarSpec.id, colorHex)
-                                        }
-                                    )
-                                }
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                CarCatalog.PRESET_COLORS.drop(4).forEach { (colorHex, name) ->
-                                    PaintChip(
-                                        colorHex = colorHex,
-                                        name = name,
-                                        isSelected = selectedColor == colorHex,
-                                        onClick = {
-                                            selectedColor = colorHex
-                                            prefs.setCarColor(currentCarSpec.id, colorHex)
-                                        }
-                                    )
-                                }
-                            }
                         }
 
                         2 -> { // Tuning / Upgrades
@@ -485,35 +517,6 @@ fun GarageScreen(
     }
 }
 
-@Composable
-private fun PaintChip(
-    colorHex: Long,
-    name: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val chipColor = Color(colorHex or 0xFF000000)
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .padding(4.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(42.dp)
-                .clip(CircleShape)
-                .background(chipColor)
-                .border(
-                    width = if (isSelected) 3.dp else 1.dp,
-                    color = if (isSelected) Color.White else Color(0x33FFFFFF),
-                    shape = CircleShape
-                )
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(text = name, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Medium)
-    }
-}
 
 @Composable
 private fun StatBar(

@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.game.engine.GamePreferences
+import com.example.game.engine.GraphicsQuality
 import com.example.game.engine.SteeringType
 
 @Composable
@@ -32,6 +33,10 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     var steeringType by remember { mutableStateOf(prefs.steeringType) }
+    var graphicsQuality by remember { mutableStateOf(prefs.graphicsQuality) }
+    var characterSkin by remember { mutableStateOf(prefs.characterSkin) }
+    var roadReflections by remember { mutableStateOf(prefs.roadReflectionsEnabled) }
+    var bloomEnabled by remember { mutableStateOf(prefs.bloomEnabled) }
     var soundEnabled by remember { mutableStateOf(prefs.soundEnabled) }
     var hapticsEnabled by remember { mutableStateOf(prefs.hapticsEnabled) }
     var tiltSensitivity by remember { mutableFloatStateOf(prefs.tiltSensitivity) }
@@ -61,7 +66,7 @@ fun SettingsScreen(
             }
             Spacer(modifier = Modifier.width(14.dp))
             Text(
-                text = "AJUSTES Y CONTROLES",
+                text = "AJUSTES, CONTROLES Y GRÁFICOS",
                 color = Color.White,
                 fontWeight = FontWeight.Black,
                 fontSize = 17.sp
@@ -75,7 +80,7 @@ fun SettingsScreen(
                 .padding(horizontal = 20.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            // LEFT COLUMN: Controls
+            // LEFT COLUMN: Controls & Steering
             Column(
                 modifier = Modifier
                     .weight(0.5f)
@@ -144,16 +149,8 @@ fun SettingsScreen(
                         }
                     }
                 }
-            }
 
-            // RIGHT COLUMN: Audio, Vibration & Stats
-            Column(
-                modifier = Modifier
-                    .weight(0.5f)
-                    .fillMaxHeight()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
+                // Audio & Haptics
                 SectionHeader(title = "AUDIO Y VIBRACIÓN", icon = Icons.AutoMirrored.Filled.VolumeUp)
 
                 Surface(
@@ -203,8 +200,171 @@ fun SettingsScreen(
                         }
                     }
                 }
+            }
 
-                SectionHeader(title = "RÉCORDS", icon = Icons.Default.EmojiEvents)
+            // RIGHT COLUMN: Graphics Quality & Optimization + Records
+            Column(
+                modifier = Modifier
+                    .weight(0.5f)
+                    .fillMaxHeight()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                SectionHeader(title = "CALIDAD GRÁFICA Y RENDIMIENTO", icon = Icons.Default.Tune)
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GraphicsQuality.values().forEach { gq ->
+                        val isSelected = graphicsQuality == gq
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isSelected) Color(0xFF252A3C) else Color(0xFF1E2230),
+                            border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF00E5FF)) else null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    graphicsQuality = gq
+                                    prefs.graphicsQuality = gq
+                                }
+                                .testTag("quality_option_${gq.name}")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = gq.title,
+                                        color = if (isSelected) Color(0xFF00E5FF) else Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp
+                                    )
+                                    Text(
+                                        text = gq.description,
+                                        color = Color.Gray,
+                                        fontSize = 10.sp
+                                    )
+                                }
+                                if (isSelected) {
+                                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF00E5FF), modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Granular Optimization Toggles
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF1E2230),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Reflejos de Asfalto (PBR)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("Brillo realista en pista según el ángulo de visión", color = Color.Gray, fontSize = 9.sp)
+                            }
+                            Switch(
+                                checked = roadReflections,
+                                onCheckedChange = {
+                                    roadReflections = it
+                                    prefs.roadReflectionsEnabled = it
+                                },
+                                colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFF00E5FF), checkedTrackColor = Color(0x6600E5FF))
+                            )
+                        }
+
+                        HorizontalDivider(color = Color(0xFF282D3E))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Efectos de Brillo / Luces", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("Proyectores de faros duales y emisión de neón", color = Color.Gray, fontSize = 9.sp)
+                            }
+                            Switch(
+                                checked = bloomEnabled,
+                                onCheckedChange = {
+                                    bloomEnabled = it
+                                    prefs.bloomEnabled = it
+                                },
+                                colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFF00E5FF), checkedTrackColor = Color(0x6600E5FF))
+                            )
+                        }
+                    }
+                }
+
+                // 3D PILOT & REALISTIC CHARACTER SKINS
+                SectionHeader(title = "EQUIPAMIENTO DE PILOTO 3D", icon = Icons.Default.Person)
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    com.example.game.engine.CharacterSkin.values().forEach { skin ->
+                        val isSelected = characterSkin == skin
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isSelected) Color(0xFF252A3C) else Color(0xFF1E2230),
+                            border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, Color(0xFFE50914)) else null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    characterSkin = skin
+                                    prefs.characterSkin = skin
+                                }
+                                .testTag("pilot_skin_${skin.id}")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Suit & Visor color dots preview
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(end = 10.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(skin.suitColorHex or 0xFF000000))
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .size(12.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(skin.visorColorHex or 0xFF000000))
+                                    )
+                                }
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = skin.title,
+                                        color = if (isSelected) Color(0xFFE50914) else Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp
+                                    )
+                                    Text(
+                                        text = skin.subtitle,
+                                        color = Color.Gray,
+                                        fontSize = 9.sp
+                                    )
+                                }
+                                if (isSelected) {
+                                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFFE50914), modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                SectionHeader(title = "RÉCORDS Y BANCO", icon = Icons.Default.EmojiEvents)
 
                 Surface(
                     shape = RoundedCornerShape(12.dp),

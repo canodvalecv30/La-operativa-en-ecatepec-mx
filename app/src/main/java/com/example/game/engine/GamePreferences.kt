@@ -16,6 +16,44 @@ enum class SteeringType {
     TILT_SENSOR
 }
 
+enum class GraphicsQuality(val title: String, val description: String, val renderDistance: Float, val shadowQuality: Int) {
+    LOW("Baja (Fluido)", "Máximo rendimiento para dispositivos modestos", 160f, 0),
+    MEDIUM("Media (Equilibrado)", "Balance ideal 60 FPS con efectos", 240f, 1),
+    HIGH("Alta (Realista)", "Iluminación metálica, sombras y marcas viales", 300f, 2),
+    ULTRA("Ultra (Detalle Extremo)", "Reflejos de asfalto, marcas y partículas densas", 360f, 3),
+    EXTREME("Extremo (120 FPS / Realismo)", "Iluminación PBR, reflejos y distancia máxima", 440f, 4)
+}
+
+enum class CharacterSkin(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val suitColorHex: Long,
+    val accentColorHex: Long,
+    val visorColorHex: Long,
+    val helmetColorHex: Long
+) {
+    PRO_RACER("pro_racer", "Piloto Apex Pro", "Mono ignífugo de fibra, casco aerodinámico y visor cyan", 0xFFE50914, 0xFF12141C, 0xFF00E5FF, 0xFFF5F5F5),
+    STREET_DRIFTER("street_drifter", "Drifter Callejero", "Estilo urbano con cazadora deportiva y visera dorada", 0xFF1E212D, 0xFFE50914, 0xFFFFD700, 0xFF2A2D3A),
+    CYBER_PILOT("cyber_pilot", "Cyber Rider Neo", "Traje táctico con visor holográfico y neón esmeralda", 0xFF7C4DFF, 0xFF12141C, 0xFF00E676, 0xFF0D0E15),
+    GOLDEN_CHAMPION("golden_champ", "Campeón Dorado", "Equipamiento de oro de competición y visor de espejo", 0xFFFFB300, 0xFF212121, 0xFFFFFFFF, 0xFFFFD700)
+}
+
+enum class DecalType(val id: String, val title: String, val subtitle: String, val price: Int) {
+    NONE("none", "Pintura Limpia", "Sin vinilo, acabado de fábrica", 0),
+    RACING_STRIPES("stripes", "Rayas GT", "Doble franja de competición en capó y techo", 300),
+    CYBER_SLASH("cyber", "Cyber Slash", "Líneas de velocidad en laterales y puertas", 450),
+    CARBON_ROOF("carbon", "Capó & Techo Carbón", "Fibra de carbono negra de contraste", 600),
+    RACE_NUMBER("number", "Dorsal #07", "Círculo de circuito profesional en puertas", 400)
+}
+
+enum class PaintFinish(val id: String, val title: String, val glossiness: Float) {
+    METALLIC("metallic", "Metálico", 1.0f),
+    MATTE("matte", "Mate", 0.15f),
+    CHROME("chrome", "Cromado", 1.8f),
+    NEON("neon", "Neón Glow", 1.3f)
+}
+
 data class CarSpec(
     val id: String,
     val name: String,
@@ -103,7 +141,35 @@ object CarCatalog {
         0xFF7C4DFF to "Púrpura Viper",
         0xFFFF3D00 to "Naranja Lava",
         0xFF212121 to "Negro Carbón",
-        0xFFECEFF1 to "Blanco Perla"
+        0xFFECEFF1 to "Blanco Perla",
+        0xFF00B0FF to "Azul Eléctrico",
+        0xFFE91E63 to "Rosa Fucsia",
+        0xFF009688 to "Turquesa GT",
+        0xFF607D8B to "Gris Titanio"
+    )
+
+    val DECAL_COLORS = listOf(
+        0xFFFFFFFF to "Blanco Glaciar",
+        0xFF12141C to "Negro Ónix",
+        0xFFFFD600 to "Amarillo Speed",
+        0xFF00E5FF to "Azul Neón",
+        0xFFE50914 to "Rojo Fuego",
+        0xFF76FF03 to "Verde Ácido",
+        0xFFFF9800 to "Naranja F1"
+    )
+
+    val RIM_COLORS = listOf(
+        0xFFE0E0E0 to "Plata Pulida",
+        0xFF1E212D to "Negro Brillante",
+        0xFFFFD700 to "Oro Competición",
+        0xFF8D6E63 to "Bronce Satinado"
+    )
+
+    val CALIPER_COLORS = listOf(
+        0xFFE50914 to "Rojo Brembo",
+        0xFFFFD600 to "Amarillo Oro",
+        0xFF00E5FF to "Azul Eléctrico",
+        0xFF76FF03 to "Verde Ácido"
     )
 }
 
@@ -135,6 +201,57 @@ class GamePreferences(context: Context) {
         prefs.edit().putLong("car_color_$carId", color).apply()
     }
 
+    fun getCarDecal(carId: String): DecalType {
+        val name = prefs.getString("car_decal_$carId", DecalType.NONE.name)
+        return try { DecalType.valueOf(name ?: DecalType.NONE.name) } catch (e: Exception) { DecalType.NONE }
+    }
+
+    fun setCarDecal(carId: String, decal: DecalType) {
+        prefs.edit().putString("car_decal_$carId", decal.name).apply()
+    }
+
+    fun isDecalUnlocked(carId: String, decal: DecalType): Boolean {
+        if (decal == DecalType.NONE) return true
+        return prefs.getBoolean("decal_unlocked_${carId}_${decal.name}", false)
+    }
+
+    fun unlockDecal(carId: String, decal: DecalType) {
+        prefs.edit().putBoolean("decal_unlocked_${carId}_${decal.name}", true).apply()
+    }
+
+    fun getCarDecalColor(carId: String): Long {
+        return prefs.getLong("car_decal_color_$carId", 0xFFFFFFFF)
+    }
+
+    fun setCarDecalColor(carId: String, color: Long) {
+        prefs.edit().putLong("car_decal_color_$carId", color).apply()
+    }
+
+    fun getCarFinish(carId: String): PaintFinish {
+        val name = prefs.getString("car_finish_$carId", PaintFinish.METALLIC.name)
+        return try { PaintFinish.valueOf(name ?: PaintFinish.METALLIC.name) } catch (e: Exception) { PaintFinish.METALLIC }
+    }
+
+    fun setCarFinish(carId: String, finish: PaintFinish) {
+        prefs.edit().putString("car_finish_$carId", finish.name).apply()
+    }
+
+    fun getCarRimColor(carId: String): Long {
+        return prefs.getLong("car_rim_color_$carId", 0xFFE0E0E0)
+    }
+
+    fun setCarRimColor(carId: String, color: Long) {
+        prefs.edit().putLong("car_rim_color_$carId", color).apply()
+    }
+
+    fun getCarCaliperColor(carId: String): Long {
+        return prefs.getLong("car_caliper_color_$carId", 0xFFE50914)
+    }
+
+    fun setCarCaliperColor(carId: String, color: Long) {
+        prefs.edit().putLong("car_caliper_color_$carId", color).apply()
+    }
+
     fun getUpgradeLevel(carId: String, upgradeType: String): Int {
         return prefs.getInt("car_upgrade_${carId}_$upgradeType", 1)
     }
@@ -162,6 +279,13 @@ class GamePreferences(context: Context) {
         get() = prefs.getFloat("tilt_sensitivity", 1.2f)
         set(value) = prefs.edit().putFloat("tilt_sensitivity", value).apply()
 
+    var graphicsQuality: GraphicsQuality
+        get() {
+            val name = prefs.getString("graphics_quality", GraphicsQuality.HIGH.name)
+            return try { GraphicsQuality.valueOf(name ?: GraphicsQuality.HIGH.name) } catch (e: Exception) { GraphicsQuality.HIGH }
+        }
+        set(value) = prefs.edit().putString("graphics_quality", value.name).apply()
+
     var bestDistanceRush: Float
         get() = prefs.getFloat("best_distance_rush", 0f)
         set(value) = prefs.edit().putFloat("best_distance_rush", value).apply()
@@ -173,4 +297,19 @@ class GamePreferences(context: Context) {
     var bestDriftScore: Int
         get() = prefs.getInt("best_drift_score", 0)
         set(value) = prefs.edit().putInt("best_drift_score", value).apply()
+
+    var characterSkin: CharacterSkin
+        get() {
+            val name = prefs.getString("character_skin", CharacterSkin.PRO_RACER.name)
+            return try { CharacterSkin.valueOf(name ?: CharacterSkin.PRO_RACER.name) } catch (e: Exception) { CharacterSkin.PRO_RACER }
+        }
+        set(value) = prefs.edit().putString("character_skin", value.name).apply()
+
+    var roadReflectionsEnabled: Boolean
+        get() = prefs.getBoolean("road_reflections_enabled", true)
+        set(value) = prefs.edit().putBoolean("road_reflections_enabled", value).apply()
+
+    var bloomEnabled: Boolean
+        get() = prefs.getBoolean("bloom_enabled", true)
+        set(value) = prefs.edit().putBoolean("bloom_enabled", value).apply()
 }

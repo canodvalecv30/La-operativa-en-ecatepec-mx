@@ -37,9 +37,15 @@ class GameEngine(
     val renderer = GameRenderer(
         getCarPhysics = { carPhysics },
         getTrackWorld = { trackWorld },
-        getCarColorHex = { carColorHex },
+        getCarColorHex = { prefs.getCarColor(carSpec.id, carSpec.defaultColorHex) },
         getCharacterPhysics = { characterPhysics },
-        getIsOnFoot = { isOnFoot }
+        getIsOnFoot = { isOnFoot },
+        getGraphicsQuality = { prefs.graphicsQuality },
+        getCarDecal = { prefs.getCarDecal(carSpec.id) },
+        getCarDecalColor = { prefs.getCarDecalColor(carSpec.id) },
+        getCarRimColor = { prefs.getCarRimColor(carSpec.id) },
+        getCarCaliperColor = { prefs.getCarCaliperColor(carSpec.id) },
+        getCharacterSkin = { prefs.characterSkin }
     )
 
     // Vehicle Driving Inputs

@@ -23,7 +23,7 @@ object ShaderUtil {
         void main() {
             vec4 worldPos = uModelMatrix * aPosition;
             vFragPos = vec3(worldPos);
-            vNormal = mat3(uModelMatrix) * aNormal;
+            vNormal = normalize(mat3(uModelMatrix) * aNormal);
             vColor = aColor;
             
             gl_Position = uMVPMatrix * aPosition;
@@ -36,10 +36,15 @@ object ShaderUtil {
         
         uniform vec3 uLightPos;
         uniform vec3 uViewPos;
-        uniform vec4 uOverrideColor; // If w > 0, overrides aColor
+        uniform vec4 uOverrideColor; // If a > 0, overrides aColor
         uniform float uFogStart;
         uniform float uFogEnd;
         uniform vec3 uFogColor;
+        
+        // Headlight projection uniforms
+        uniform vec3 uHeadlightPos;
+        uniform vec3 uHeadlightDir;
+        uniform int uEnableHeadlight;
         
         varying vec4 vColor;
         varying vec3 vNormal;
@@ -49,27 +54,82 @@ object ShaderUtil {
         void main() {
             vec3 norm = normalize(vNormal);
             vec3 lightDir = normalize(uLightPos - vFragPos);
-            
-            // Ambient
-            float ambientStrength = 0.45;
-            vec3 ambient = ambientStrength * vec3(1.0, 1.0, 1.0);
-            
-            // Diffuse
-            float diff = max(dot(norm, lightDir), 0.0);
-            vec3 diffuse = diff * vec3(1.0, 0.95, 0.9);
-            
-            // Specular
-            float specularStrength = 0.35;
             vec3 viewDir = normalize(uViewPos - vFragPos);
-            vec3 reflectDir = reflect(-lightDir, norm);
-            float spec = pow(max(dot(viewDir, reflectDir), 0.0), 16.0);
-            vec3 specular = specularStrength * spec * vec3(1.0, 1.0, 1.0);
+            
+            // 1. Two-tone hemispheric atmospheric ambient lighting (Sky / Ground bounce)
+            float upFactor = clamp(norm.y * 0.5 + 0.5, 0.0, 1.0);
+            vec3 skyAmbient = vec3(0.58, 0.64, 0.78);
+            vec3 groundAmbient = vec3(0.24, 0.25, 0.28);
+            vec3 ambient = mix(groundAmbient, skyAmbient, upFactor);
+            
+            // 2. Diffuse Sun Key Light (Soft wrap for natural surface curvature)
+            float NdotL = dot(norm, lightDir);
+            float diff = max(NdotL * 0.8 + 0.2, 0.0);
+            vec3 sunColor = vec3(1.0, 0.97, 0.91);
+            vec3 diffuse = diff * sunColor * 0.82;
+            
+            // 3. Specular Metallic & Clearcoat (Blinn-Phong Half-Vector)
+            vec3 halfDir = normalize(lightDir + viewDir);
+            float NdotH = max(dot(norm, halfDir), 0.0);
+            float specPower = 44.0;
+            float specular = pow(NdotH, specPower);
+            
+            // Fresnel rim reflection on curved automotive and visor surfaces
+            float NdotV = max(dot(norm, viewDir), 0.0);
+            float fresnel = pow(1.0 - NdotV, 3.5) * 0.45;
+            vec3 specularTotal = (specular * 0.65 + fresnel) * vec3(1.0, 0.98, 0.95);
+            
+            // 4. Realistic Road Asphalt Sheen (Shallow view angle reflections)
+            if (norm.y > 0.85) {
+                float roadSheen = pow(1.0 - NdotV, 2.5) * 0.28;
+                specularTotal += vec3(0.85, 0.92, 1.0) * roadSheen;
+            }
+            
+            // 5. Dual-Cone Xenon Headlight Spotlights on Road and Barriers
+            vec3 headlightColor = vec3(0.0);
+            if (uEnableHeadlight > 0) {
+                // Left and right projector positions
+                vec3 headDirNorm = normalize(uHeadlightDir);
+                vec3 rightVec = normalize(cross(headDirNorm, vec3(0.0, 1.0, 0.0))) * 0.85;
+                
+                // Beam 1: Left projector
+                vec3 toFragL = vFragPos - (uHeadlightPos - rightVec);
+                float distL = length(toFragL);
+                if (distL > 0.6 && distL < 50.0) {
+                    float spotL = dot(normalize(toFragL), headDirNorm);
+                    if (spotL > 0.84) {
+                        float intensityL = smoothstep(0.84, 0.97, spotL);
+                        float attL = clamp(1.0 - (distL / 50.0), 0.0, 1.0);
+                        headlightColor += vec3(0.70, 0.88, 1.0) * (intensityL * attL * 0.9);
+                    }
+                }
+                
+                // Beam 2: Right projector
+                vec3 toFragR = vFragPos - (uHeadlightPos + rightVec);
+                float distR = length(toFragR);
+                if (distR > 0.6 && distR < 50.0) {
+                    float spotR = dot(normalize(toFragR), headDirNorm);
+                    if (spotR > 0.84) {
+                        float intensityR = smoothstep(0.84, 0.97, spotR);
+                        float attR = clamp(1.0 - (distR / 50.0), 0.0, 1.0);
+                        headlightColor += vec3(0.70, 0.88, 1.0) * (intensityR * attR * 0.9);
+                    }
+                }
+            }
             
             vec4 baseColor = (uOverrideColor.a > 0.0) ? uOverrideColor : vColor;
-            vec3 result = (ambient + diffuse + specular) * baseColor.rgb;
             
-            // Distance fog
+            // 6. Emissive boost for brake lights, nitro flames, streetlights and neon visors
+            float luminance = dot(baseColor.rgb, vec3(0.299, 0.587, 0.114));
+            float emissiveFactor = (luminance > 0.82) ? 0.35 : 0.0;
+            
+            // Combine lighting passes
+            vec3 lighting = ambient + diffuse + headlightColor + vec3(emissiveFactor);
+            vec3 result = (lighting * baseColor.rgb) + (specularTotal * (baseColor.a > 0.5 ? 1.0 : 0.0));
+            
+            // 7. Realistic atmospheric quadratic distance fog
             float fogFactor = clamp((uFogEnd - vFogDist) / (uFogEnd - uFogStart), 0.0, 1.0);
+            fogFactor = fogFactor * fogFactor; // Smooth non-linear fog falloff
             vec3 finalColor = mix(uFogColor, result, fogFactor);
             
             gl_FragColor = vec4(finalColor, baseColor.a);

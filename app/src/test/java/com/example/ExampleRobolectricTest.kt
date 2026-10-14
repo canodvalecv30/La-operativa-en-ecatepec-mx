@@ -90,5 +90,61 @@ class ExampleRobolectricTest {
     val prefs = GamePreferences(context)
     assertTrue("Starter car must be unlocked by default", prefs.isCarUnlocked("apex_gt"))
     assertTrue("Player should start with initial coins", prefs.coins >= 1000)
+    assertEquals(com.example.game.engine.GraphicsQuality.HIGH, prefs.graphicsQuality)
+    prefs.graphicsQuality = com.example.game.engine.GraphicsQuality.ULTRA
+    assertEquals(com.example.game.engine.GraphicsQuality.ULTRA, prefs.graphicsQuality)
+    prefs.graphicsQuality = com.example.game.engine.GraphicsQuality.EXTREME
+    assertEquals(com.example.game.engine.GraphicsQuality.EXTREME, prefs.graphicsQuality)
+
+    // Character / Pilot skin default and persistence
+    assertEquals(com.example.game.engine.CharacterSkin.PRO_RACER, prefs.characterSkin)
+    prefs.characterSkin = com.example.game.engine.CharacterSkin.CYBER_PILOT
+    assertEquals(com.example.game.engine.CharacterSkin.CYBER_PILOT, prefs.characterSkin)
+
+    // Optimization toggles
+    assertTrue(prefs.roadReflectionsEnabled)
+    assertTrue(prefs.bloomEnabled)
+  }
+
+  @Test
+  fun `test car customization colors decals and rims`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val prefs = GamePreferences(context)
+    val carId = "apex_gt"
+
+    // Default color & custom paint color
+    val defaultColor = prefs.getCarColor(carId, 0xFFE50914)
+    assertEquals(0xFFE50914, defaultColor)
+    prefs.setCarColor(carId, 0xFF00E5FF)
+    assertEquals(0xFF00E5FF, prefs.getCarColor(carId, 0xFFE50914))
+
+    // Paint finish
+    assertEquals(com.example.game.engine.PaintFinish.METALLIC, prefs.getCarFinish(carId))
+    prefs.setCarFinish(carId, com.example.game.engine.PaintFinish.CHROME)
+    assertEquals(com.example.game.engine.PaintFinish.CHROME, prefs.getCarFinish(carId))
+
+    // Decals: default NONE is unlocked
+    assertEquals(com.example.game.engine.DecalType.NONE, prefs.getCarDecal(carId))
+    assertTrue(prefs.isDecalUnlocked(carId, com.example.game.engine.DecalType.NONE))
+
+    // Lock & unlock custom decal
+    assertFalse(prefs.isDecalUnlocked(carId, com.example.game.engine.DecalType.RACING_STRIPES))
+    prefs.unlockDecal(carId, com.example.game.engine.DecalType.RACING_STRIPES)
+    assertTrue(prefs.isDecalUnlocked(carId, com.example.game.engine.DecalType.RACING_STRIPES))
+
+    prefs.setCarDecal(carId, com.example.game.engine.DecalType.RACING_STRIPES)
+    assertEquals(com.example.game.engine.DecalType.RACING_STRIPES, prefs.getCarDecal(carId))
+
+    // Decal color
+    prefs.setCarDecalColor(carId, 0xFFFFD600)
+    assertEquals(0xFFFFD600, prefs.getCarDecalColor(carId))
+
+    // Wheel rims & brake calipers
+    prefs.setCarRimColor(carId, 0xFFFFD700)
+    assertEquals(0xFFFFD700, prefs.getCarRimColor(carId))
+
+    prefs.setCarCaliperColor(carId, 0xFF00E5FF)
+    assertEquals(0xFF00E5FF, prefs.getCarCaliperColor(carId))
   }
 }
+

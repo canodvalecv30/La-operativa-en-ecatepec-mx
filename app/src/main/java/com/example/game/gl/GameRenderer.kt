@@ -5,6 +5,7 @@ import android.opengl.GLSurfaceView
 import android.opengl.Matrix
 import com.example.game.engine.CarPhysics
 import com.example.game.engine.CharacterPhysics
+import com.example.game.engine.GraphicsQuality
 import com.example.game.engine.TrackWorld
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
@@ -23,6 +24,12 @@ class GameRenderer(
     private val getCarColorHex: () -> Long,
     private val getCharacterPhysics: () -> CharacterPhysics? = { null },
     private val getIsOnFoot: () -> Boolean = { false },
+    private val getGraphicsQuality: () -> GraphicsQuality = { GraphicsQuality.HIGH },
+    private val getCarDecal: () -> com.example.game.engine.DecalType = { com.example.game.engine.DecalType.NONE },
+    private val getCarDecalColor: () -> Long = { 0xFFFFFFFF },
+    private val getCarRimColor: () -> Long = { 0xFFE0E0E0 },
+    private val getCarCaliperColor: () -> Long = { 0xFFE50914 },
+    private val getCharacterSkin: () -> com.example.game.engine.CharacterSkin = { com.example.game.engine.CharacterSkin.PRO_RACER },
     private val isGarageMode: Boolean = false
 ) : GLSurfaceView.Renderer {
 
@@ -35,6 +42,7 @@ class GameRenderer(
 
     var cameraMode = if (isGarageMode) CameraMode.ORBIT_GARAGE else CameraMode.CHASE
     var garageOrbitAngle = 45f
+    var showCharacterInGarage = false
 
     // Camera state
     private var camPosX = 0f
@@ -51,10 +59,15 @@ class GameRenderer(
     private val viewMatrix = FloatArray(16)
     private val vpMatrix = FloatArray(16)
 
+    private var viewportWidth = 1
+    private var viewportHeight = 1
+    private var viewportAspect = 1.77f
+    private var currentFov = 60f
+
     // Lighting & Fog
     private val lightPos = floatArrayOf(20f, 60f, 40f)
     private val viewPos = FloatArray(3)
-    private val fogColor = floatArrayOf(0.07f, 0.08f, 0.12f) // Midnight Cyber Blue
+    private val fogColor = floatArrayOf(0.08f, 0.10f, 0.15f) // Midnight Cyber Blue atmosphere
 
     private var lastTimeMs = System.currentTimeMillis()
 
@@ -75,9 +88,11 @@ class GameRenderer(
     }
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
+        viewportWidth = width
+        viewportHeight = height
         GLES20.glViewport(0, 0, width, height)
-        val aspect = width.toFloat() / max(1, height).toFloat()
-        Matrix.perspectiveM(projMatrix, 0, 60f, aspect, 0.5f, 350f)
+        viewportAspect = width.toFloat() / max(1, height).toFloat()
+        Matrix.perspectiveM(projMatrix, 0, currentFov, viewportAspect, 0.5f, 350f)
     }
 
     override fun onDrawFrame(gl: GL10?) {
@@ -90,22 +105,42 @@ class GameRenderer(
 
         GLES20.glUseProgram(program)
 
-        // Set Fog parameters
-        val uFogStartHandle = GLES20.glGetUniformLocation(program, "uFogStart")
-        val uFogEndHandle = GLES20.glGetUniformLocation(program, "uFogEnd")
-        val uFogColorHandle = GLES20.glGetUniformLocation(program, "uFogColor")
-        GLES20.glUniform1f(uFogStartHandle, 40f)
-        GLES20.glUniform1f(uFogEndHandle, 280f)
-        GLES20.glUniform3fv(uFogColorHandle, 1, fogColor, 0)
-
         val car = getCarPhysics()
         val char = getCharacterPhysics()
         val isOnFoot = getIsOnFoot() && char != null
         val world = getTrackWorld()
         val carColor = getCarColorHex()
+        val quality = getGraphicsQuality()
 
-        // Update particles (only when driving)
-        if (!isOnFoot && car.isDrifting && car.speedKmH > 30f) {
+        // Dynamic FOV Warp for Speed Sensation
+        val speedRatio = (car.speedKmH / 300f).coerceIn(0f, 1f)
+        val targetFov = if (isOnFoot) 58f else (58f + speedRatio * 12f + (if (car.isNitroActive) 8f else 0f))
+        currentFov += (targetFov - currentFov) * min(1f, 8f * dt)
+        Matrix.perspectiveM(projMatrix, 0, currentFov, viewportAspect, 0.5f, quality.renderDistance + 50f)
+
+        // Set Fog parameters based on graphics quality
+        val uFogStartHandle = GLES20.glGetUniformLocation(program, "uFogStart")
+        val uFogEndHandle = GLES20.glGetUniformLocation(program, "uFogEnd")
+        val uFogColorHandle = GLES20.glGetUniformLocation(program, "uFogColor")
+        GLES20.glUniform1f(uFogStartHandle, 45f)
+        GLES20.glUniform1f(uFogEndHandle, quality.renderDistance)
+        GLES20.glUniform3fv(uFogColorHandle, 1, fogColor, 0)
+
+        // Dynamic Headlight Projection
+        val uHeadlightPosHandle = GLES20.glGetUniformLocation(program, "uHeadlightPos")
+        val uHeadlightDirHandle = GLES20.glGetUniformLocation(program, "uHeadlightDir")
+        val uEnableHeadlightHandle = GLES20.glGetUniformLocation(program, "uEnableHeadlight")
+
+        val carHeadingRad = Math.toRadians(car.headingAngle.toDouble()).toFloat()
+        val dirX = sin(carHeadingRad)
+        val dirZ = cos(carHeadingRad)
+
+        GLES20.glUniform3f(uHeadlightPosHandle, car.posX, car.posY + 0.45f, car.posZ + 1.2f)
+        GLES20.glUniform3f(uHeadlightDirHandle, dirX, -0.06f, dirZ)
+        GLES20.glUniform1i(uEnableHeadlightHandle, if (quality.shadowQuality >= 1 && !isOnFoot) 1 else 0)
+
+        // Update particles
+        if (!isOnFoot && car.isDrifting && car.speedKmH > 30f && quality.shadowQuality >= 1) {
             val rearLeftX = car.posX - 0.9f
             val rearRightX = car.posX + 0.9f
             particleSystem.emitDriftSmoke(rearLeftX, car.posY, car.posZ - 1.4f)
@@ -113,7 +148,7 @@ class GameRenderer(
         }
         particleSystem.update(dt)
 
-        // Dynamic Camera calculation
+        // Camera calculation
         if (isOnFoot && char != null) {
             updateCharacterCamera(char, dt)
         } else {
@@ -124,14 +159,13 @@ class GameRenderer(
         viewPos[1] = camPosY
         viewPos[2] = camPosZ
 
-        // Move light along with current active focal entity
         val focusX = if (isOnFoot && char != null) char.posX else car.posX
         val focusY = if (isOnFoot && char != null) char.posY else car.posY
         val focusZ = if (isOnFoot && char != null) char.posZ else car.posZ
 
-        lightPos[0] = focusX + 15f
-        lightPos[1] = focusY + 35f
-        lightPos[2] = focusZ + 30f
+        lightPos[0] = focusX + 20f
+        lightPos[1] = focusY + 45f
+        lightPos[2] = focusZ + 35f
 
         Matrix.setLookAtM(
             viewMatrix, 0,
@@ -140,14 +174,20 @@ class GameRenderer(
             0f, 1f, 0f
         )
 
-        // View-Projection Matrix
         Matrix.multiplyMM(vpMatrix, 0, projMatrix, 0, viewMatrix, 0)
 
-        // 1. Draw 3D Environment (Road, curbs, buildings, ramps, coins)
+        // 1. Draw 3D Environment with Distance Culling & Sun
         if (!isGarageMode) {
             environment.draw(
-                program, vpMatrix, lightPos, viewPos,
-                focusZ, world.ramps, world.bonusCoins
+                program = program,
+                vpMatrix = vpMatrix,
+                lightPos = lightPos,
+                viewPos = viewPos,
+                playerZ = focusZ,
+                ramps = world.ramps,
+                coins = world.bonusCoins,
+                renderDistance = quality.renderDistance,
+                enableDetailedScenery = quality.shadowQuality >= 1
             )
 
             // 2. Draw Traffic vehicles
@@ -156,10 +196,16 @@ class GameRenderer(
                 world.trafficCars, focusZ
             )
         } else {
-            // Draw a stylish showroom floor in garage mode
             environment.draw(
-                program, vpMatrix, lightPos, viewPos,
-                0f, emptyList(), emptyList()
+                program = program,
+                vpMatrix = vpMatrix,
+                lightPos = lightPos,
+                viewPos = viewPos,
+                playerZ = 0f,
+                ramps = emptyList(),
+                coins = emptyList(),
+                renderDistance = 160f,
+                enableDetailedScenery = false
             )
         }
 
@@ -180,10 +226,14 @@ class GameRenderer(
             wheelSpinAngle = if (isGarageMode) 0f else car.wheelSpinAngle,
             carColorHex = carColor,
             isNitroActive = if (isOnFoot) false else car.isNitroActive,
-            isBraking = if (isOnFoot) true else car.isBraking
+            isBraking = if (isOnFoot) true else car.isBraking,
+            decalType = getCarDecal(),
+            decalColorHex = getCarDecalColor(),
+            rimColorHex = getCarRimColor(),
+            caliperColorHex = getCarCaliperColor()
         )
 
-        // 4. Draw 3D Character when on foot
+        // 4. Draw 3D Character when on foot or when toggled in Garage
         if (isOnFoot && char != null && !isGarageMode) {
             characterModel.draw(
                 program = program,
@@ -197,12 +247,36 @@ class GameRenderer(
                 walkPhase = char.walkPhase,
                 isMoving = char.isMoving,
                 isJumping = char.isJumping,
-                suitColorHex = carColor
+                suitColorHex = carColor,
+                skin = getCharacterSkin(),
+                torsoPitch = char.torsoPitch,
+                idlePhase = char.idlePhase,
+                headTurn = char.headTurn
+            )
+        } else if (isGarageMode && showCharacterInGarage) {
+            val idleTime = ((System.currentTimeMillis() % 100000) * 0.003f)
+            characterModel.draw(
+                program = program,
+                vpMatrix = vpMatrix,
+                lightPos = lightPos,
+                viewPos = viewPos,
+                posX = -1.85f,
+                posY = 0f,
+                posZ = 0.4f,
+                headingAngle = 30f,
+                walkPhase = 0f,
+                isMoving = false,
+                isJumping = false,
+                suitColorHex = carColor,
+                skin = getCharacterSkin(),
+                torsoPitch = 0f,
+                idlePhase = idleTime,
+                headTurn = -15f
             )
         }
 
-        // 5. Draw Particles (Smoke & Sparks)
-        if (!isGarageMode) {
+        // 5. Draw Particles
+        if (!isGarageMode && quality.shadowQuality >= 1) {
             particleSystem.draw(program, vpMatrix, lightPos, viewPos)
         }
     }
@@ -232,7 +306,6 @@ class GameRenderer(
 
     private fun updateCarCamera(car: CarPhysics, dt: Float) {
         if (isGarageMode || cameraMode == CameraMode.ORBIT_GARAGE) {
-            // Showroom 360 orbit
             val rad = Math.toRadians(garageOrbitAngle.toDouble()).toFloat()
             val dist = 6.2f
             camPosX = sin(rad) * dist
@@ -244,7 +317,6 @@ class GameRenderer(
             return
         }
 
-        // Dynamic Shake
         if (shakeIntensity > 0f) {
             shakeIntensity = (shakeIntensity - 3f * dt).coerceAtLeast(0f)
         }
@@ -253,16 +325,14 @@ class GameRenderer(
 
         when (cameraMode) {
             CameraMode.CHASE -> {
-                // Smooth chase camera behind the car
                 val headingRad = Math.toRadians(car.headingAngle.toDouble()).toFloat()
-                val chaseDist = if (car.isNitroActive) 8.5f else 7.2f
+                val chaseDist = if (car.isNitroActive) 8.6f else 7.2f
                 val chaseHeight = 2.6f + (car.speedKmH / 300f) * 0.8f
 
                 val idealCamX = car.posX - sin(headingRad) * chaseDist + shakeX
                 val idealCamY = car.posY + chaseHeight + shakeY
                 val idealCamZ = car.posZ - cos(headingRad) * chaseDist
 
-                // Smooth spring dampening
                 val lerpFactor = min(1f, 9f * dt)
                 camPosX += (idealCamX - camPosX) * lerpFactor
                 camPosY += (idealCamY - camPosY) * lerpFactor
@@ -277,7 +347,6 @@ class GameRenderer(
                 camTargetZ += (idealTargetZ - camTargetZ) * lerpFactor
             }
             CameraMode.HOOD -> {
-                // Bumper / Hood camera
                 val headingRad = Math.toRadians(car.headingAngle.toDouble()).toFloat()
                 camPosX = car.posX + sin(headingRad) * 0.8f + shakeX
                 camPosY = car.posY + 1.15f + shakeY
