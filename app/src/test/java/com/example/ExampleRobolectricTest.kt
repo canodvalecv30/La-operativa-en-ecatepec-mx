@@ -146,5 +146,64 @@ class ExampleRobolectricTest {
     prefs.setCarCaliperColor(carId, 0xFF00E5FF)
     assertEquals(0xFF00E5FF, prefs.getCarCaliperColor(carId))
   }
+
+  @Test
+  fun `test game map selection and persistence`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val prefs = GamePreferences(context)
+
+    assertEquals(com.example.game.engine.GameMap.NEON_CITY, prefs.selectedMap)
+    prefs.selectedMap = com.example.game.engine.GameMap.COASTAL_SUNSET
+    assertEquals(com.example.game.engine.GameMap.COASTAL_SUNSET, prefs.selectedMap)
+    prefs.selectedMap = com.example.game.engine.GameMap.STUNT_DISTRICT
+    assertEquals(com.example.game.engine.GameMap.STUNT_DISTRICT, prefs.selectedMap)
+  }
+
+  @Test
+  fun `test track world cross streets and pedestrians generation`() {
+    val world = com.example.game.engine.TrackWorld(
+        mode = GameMode.FREE_ROAM,
+        map = com.example.game.engine.GameMap.NEON_CITY
+    )
+
+    // Cross-streets verification
+    assertTrue("Should generate cross-streets", world.crossStreets.isNotEmpty())
+    val firstCross = world.crossStreets[0]
+    assertTrue("Cross-street has valid Z position", firstCross.posZ > 0f)
+    assertTrue("Cross-street has valid name", firstCross.name.isNotBlank())
+
+    // Pedestrians verification
+    assertTrue("Should generate pedestrians on sidewalks and crosswalks", world.pedestrians.isNotEmpty())
+    val firstPed = world.pedestrians[0]
+    assertTrue("Pedestrian has positive speed", firstPed.speed > 0f)
+    assertTrue("Pedestrian is spawned along sidewalk or crosswalk", kotlin.math.abs(firstPed.posX) > 5f)
+
+    // Pedestrian evasion test
+    val starter = CarCatalog.CARS[0]
+    val car = CarPhysics(starter)
+    car.speedKmH = 80f
+    car.posX = firstPed.posX
+    car.posZ = firstPed.posZ - 2f
+
+    val notice = world.update(playerCar = car, playerChar = null, isOnFoot = false, dt = 0.05f)
+    assertEquals(com.example.game.engine.PedestrianState.DODGING, firstPed.state)
+    assertTrue(world.pedestrianDodgesCount > 0)
+  }
+
+  @Test
+  fun `test dynamic map switching in game engine`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val prefs = GamePreferences(context)
+    val engine = GameEngine(context, prefs, GameMode.FREE_ROAM)
+
+    assertEquals(com.example.game.engine.GameMap.NEON_CITY, engine.activeMap)
+    engine.changeMap(com.example.game.engine.GameMap.COASTAL_SUNSET)
+    assertEquals(com.example.game.engine.GameMap.COASTAL_SUNSET, engine.activeMap)
+    assertEquals(com.example.game.engine.GameMap.COASTAL_SUNSET, prefs.selectedMap)
+    assertTrue(engine.trackWorld.crossStreets.isNotEmpty())
+    assertTrue(engine.trackWorld.pedestrians.isNotEmpty())
+
+    engine.destroy()
+  }
 }
 

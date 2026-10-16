@@ -47,6 +47,12 @@ class Character3DModel {
     // 5. Dynamic Ground Contact Shadow
     private val contactShadow = MeshBuilder.createBox(1.10f, 0.01f, 1.10f, 0.03f, 0.03f, 0.04f, 0.55f)
 
+    // 6. Tactical Pistol & Cyber Weapon 3D Model
+    private val gunSlide = MeshBuilder.createBox(0.09f, 0.10f, 0.32f, 0.18f, 0.20f, 0.24f)
+    private val gunGrip = MeshBuilder.createBox(0.08f, 0.18f, 0.11f, 0.12f, 0.12f, 0.14f)
+    private val gunBarrel = MeshBuilder.createCylinder(0.035f, 0.14f, 8, 0.10f, 0.10f, 0.12f)
+    private val gunLaserSight = MeshBuilder.createBox(0.03f, 0.03f, 0.08f, 0.0f, 0.95f, 1.0f)
+
     // Scratch matrices for optimized performance (zero allocation during render)
     private val modelMatrix = FloatArray(16)
     private val limbMatrix = FloatArray(16)
@@ -71,7 +77,9 @@ class Character3DModel {
         skin: CharacterSkin = CharacterSkin.PRO_RACER,
         torsoPitch: Float = 0f,
         idlePhase: Float = 0f,
-        headTurn: Float = 0f
+        headTurn: Float = 0f,
+        isHoldingGun: Boolean = false,
+        recoilKick: Float = 0f
     ) {
         GLES20.glUseProgram(program)
 
@@ -253,8 +261,9 @@ class Character3DModel {
             isLeft = true
         )
 
-        val rightArmSwing = if (isJumping) -48f else if (isMoving) limbSwing * 0.85f else 6f
-        val rightElbowFlex = if (isJumping) 25f else if (isMoving) 55f + (limbSwing * 0.35f).coerceAtLeast(0f) else 18f
+        val rightArmSwing = if (isHoldingGun) (-82f + recoilKick * 18f) else (if (isJumping) -48f else if (isMoving) limbSwing * 0.85f else 6f)
+        val rightElbowFlex = if (isHoldingGun) 12f else (if (isJumping) 25f else if (isMoving) 55f + (limbSwing * 0.35f).coerceAtLeast(0f) else 18f)
+        val rightArmRoll = if (isHoldingGun) -3f else -8f
 
         drawArticulatedArm(
             shoulderMesh = shoulderArmor,
@@ -273,10 +282,11 @@ class Character3DModel {
             shoulderX = 0.36f, shoulderY = 0.36f, shoulderZ = 0f,
             armPitch = rightArmSwing,
             elbowBend = rightElbowFlex,
-            armRoll = -8f,
+            armRoll = rightArmRoll,
             suitR = sr, suitG = sg, suitB = sb,
             armorR = ar, armorG = ag, armorB = ab,
-            isLeft = false
+            isLeft = false,
+            isHoldingGun = isHoldingGun
         )
     }
 
@@ -345,7 +355,8 @@ class Character3DModel {
         armRoll: Float,
         suitR: Float, suitG: Float, suitB: Float,
         armorR: Float, armorG: Float, armorB: Float,
-        isLeft: Boolean
+        isLeft: Boolean,
+        isHoldingGun: Boolean = false
     ) {
         // Shoulder joint
         Matrix.setIdentityM(limbMatrix, 0)
@@ -373,6 +384,14 @@ class Character3DModel {
         renderChildDirect(gloveMesh, program, vpMatrix, tempMatrix, uMVPHandle, uModelHandle, uColorHandle, 0f, -0.30f, 0.01f, 0f, 0f, 0f, 0.18f, 0.18f, 0.20f, 1f)
         renderChildDirect(knuckleMesh, program, vpMatrix, tempMatrix, uMVPHandle, uModelHandle, uColorHandle, 0f, -0.28f, 0.06f, 0f, 0f, 0f, 0.88f, 0.88f, 0.92f, 1f)
         renderChildDirect(thumbMesh, program, vpMatrix, tempMatrix, uMVPHandle, uModelHandle, uColorHandle, (if (isLeft) 0.06f else -0.06f), -0.29f, 0.02f, 0f, 0f, 0f, 0.18f, 0.18f, 0.20f, 1f)
+
+        // 3D Tactical Pistol firmly mounted in hand
+        if (!isLeft && isHoldingGun) {
+            renderChildDirect(gunGrip, program, vpMatrix, tempMatrix, uMVPHandle, uModelHandle, uColorHandle, 0f, -0.38f, 0.05f, 15f, 0f, 0f, 0.12f, 0.12f, 0.14f, 1f)
+            renderChildDirect(gunSlide, program, vpMatrix, tempMatrix, uMVPHandle, uModelHandle, uColorHandle, 0f, -0.32f, 0.16f, 0f, 0f, 0f, 0.20f, 0.22f, 0.26f, 1f)
+            renderChildDirect(gunBarrel, program, vpMatrix, tempMatrix, uMVPHandle, uModelHandle, uColorHandle, 0f, -0.32f, 0.32f, 90f, 0f, 0f, 0.10f, 0.10f, 0.12f, 1f)
+            renderChildDirect(gunLaserSight, program, vpMatrix, tempMatrix, uMVPHandle, uModelHandle, uColorHandle, 0f, -0.38f, 0.18f, 0f, 0f, 0f, 0.0f, 0.95f, 1.0f, 1f)
+        }
     }
 
     private fun renderChild(

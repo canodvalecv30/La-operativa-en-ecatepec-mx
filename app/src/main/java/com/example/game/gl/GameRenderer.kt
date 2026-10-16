@@ -5,6 +5,7 @@ import android.opengl.GLSurfaceView
 import android.opengl.Matrix
 import com.example.game.engine.CarPhysics
 import com.example.game.engine.CharacterPhysics
+import com.example.game.engine.GameMap
 import com.example.game.engine.GraphicsQuality
 import com.example.game.engine.TrackWorld
 import javax.microedition.khronos.egl.EGLConfig
@@ -30,6 +31,7 @@ class GameRenderer(
     private val getCarRimColor: () -> Long = { 0xFFE0E0E0 },
     private val getCarCaliperColor: () -> Long = { 0xFFE50914 },
     private val getCharacterSkin: () -> com.example.game.engine.CharacterSkin = { com.example.game.engine.CharacterSkin.PRO_RACER },
+    private val getMap: () -> com.example.game.engine.GameMap = { com.example.game.engine.GameMap.NEON_CITY },
     private val isGarageMode: Boolean = false
 ) : GLSurfaceView.Renderer {
 
@@ -38,6 +40,7 @@ class GameRenderer(
     private lateinit var characterModel: Character3DModel
     private lateinit var environment: Environment3D
     private lateinit var traffic3D: Traffic3D
+    private lateinit var pedestrian3D: Pedestrian3D
     val particleSystem = ParticleSystem()
 
     var cameraMode = if (isGarageMode) CameraMode.ORBIT_GARAGE else CameraMode.CHASE
@@ -83,6 +86,7 @@ class GameRenderer(
         characterModel = Character3DModel()
         environment = Environment3D()
         traffic3D = Traffic3D()
+        pedestrian3D = Pedestrian3D()
 
         lastTimeMs = System.currentTimeMillis()
     }
@@ -100,6 +104,8 @@ class GameRenderer(
         val dt = ((now - lastTimeMs) / 1000f).coerceIn(0.001f, 0.05f)
         lastTimeMs = now
 
+        val activeMap = getMap()
+        GLES20.glClearColor(activeMap.fogColor[0], activeMap.fogColor[1], activeMap.fogColor[2], 1.0f)
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
         if (program == 0) return
 
@@ -118,13 +124,13 @@ class GameRenderer(
         currentFov += (targetFov - currentFov) * min(1f, 8f * dt)
         Matrix.perspectiveM(projMatrix, 0, currentFov, viewportAspect, 0.5f, quality.renderDistance + 50f)
 
-        // Set Fog parameters based on graphics quality
+        // Set Fog parameters based on graphics quality and active map atmosphere
         val uFogStartHandle = GLES20.glGetUniformLocation(program, "uFogStart")
         val uFogEndHandle = GLES20.glGetUniformLocation(program, "uFogEnd")
         val uFogColorHandle = GLES20.glGetUniformLocation(program, "uFogColor")
         GLES20.glUniform1f(uFogStartHandle, 45f)
         GLES20.glUniform1f(uFogEndHandle, quality.renderDistance)
-        GLES20.glUniform3fv(uFogColorHandle, 1, fogColor, 0)
+        GLES20.glUniform3fv(uFogColorHandle, 1, activeMap.fogColor, 0)
 
         // Dynamic Headlight Projection
         val uHeadlightPosHandle = GLES20.glGetUniformLocation(program, "uHeadlightPos")
@@ -163,9 +169,10 @@ class GameRenderer(
         val focusY = if (isOnFoot && char != null) char.posY else car.posY
         val focusZ = if (isOnFoot && char != null) char.posZ else car.posZ
 
-        lightPos[0] = focusX + 20f
-        lightPos[1] = focusY + 45f
-        lightPos[2] = focusZ + 35f
+        val mapLight = activeMap.lightPos
+        lightPos[0] = focusX + mapLight[0]
+        lightPos[1] = focusY + mapLight[1]
+        lightPos[2] = focusZ + mapLight[2]
 
         Matrix.setLookAtM(
             viewMatrix, 0,
@@ -176,7 +183,7 @@ class GameRenderer(
 
         Matrix.multiplyMM(vpMatrix, 0, projMatrix, 0, viewMatrix, 0)
 
-        // 1. Draw 3D Environment with Distance Culling & Sun
+        // 1. Draw 3D Environment with Distance Culling, Sun & Cross Streets
         if (!isGarageMode) {
             environment.draw(
                 program = program,
@@ -186,6 +193,8 @@ class GameRenderer(
                 playerZ = focusZ,
                 ramps = world.ramps,
                 coins = world.bonusCoins,
+                crossStreets = world.crossStreets,
+                map = activeMap,
                 renderDistance = quality.renderDistance,
                 enableDetailedScenery = quality.shadowQuality >= 1
             )
@@ -194,6 +203,17 @@ class GameRenderer(
             traffic3D.draw(
                 program, vpMatrix, lightPos, viewPos,
                 world.trafficCars, focusZ
+            )
+
+            // 3. Draw 3D Pedestrians along sidewalks and crosswalks
+            pedestrian3D.draw(
+                program = program,
+                vpMatrix = vpMatrix,
+                lightPos = lightPos,
+                viewPos = viewPos,
+                pedestrians = world.pedestrians,
+                playerZ = focusZ,
+                renderDistance = quality.renderDistance
             )
         } else {
             environment.draw(
@@ -204,6 +224,8 @@ class GameRenderer(
                 playerZ = 0f,
                 ramps = emptyList(),
                 coins = emptyList(),
+                crossStreets = emptyList(),
+                map = GameMap.NEON_CITY,
                 renderDistance = 160f,
                 enableDetailedScenery = false
             )

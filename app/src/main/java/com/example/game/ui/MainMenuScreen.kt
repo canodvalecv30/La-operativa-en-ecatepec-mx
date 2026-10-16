@@ -10,7 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.game.engine.CarCatalog
+import com.example.game.engine.GameMap
 import com.example.game.engine.GameMode
 import com.example.game.engine.GamePreferences
 
@@ -34,6 +35,8 @@ fun MainMenuScreen(
     modifier: Modifier = Modifier
 ) {
     val selectedCar = CarCatalog.CARS.find { it.id == prefs.selectedCarId } ?: CarCatalog.CARS[0]
+    var currentMap by remember { mutableStateOf(prefs.selectedMap) }
+    var showMapDialog by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -195,6 +198,82 @@ fun MainMenuScreen(
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Map Selector Banner
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFF1B2030),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showMapDialog = true }
+                        .testTag("map_selector_banner")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val mapColor = when (currentMap) {
+                                GameMap.NEON_CITY -> Color(0xFF00E5FF)
+                                GameMap.COASTAL_SUNSET -> Color(0xFFFF9800)
+                                GameMap.STUNT_DISTRICT -> Color(0xFF76FF03)
+                            }
+                            val mapIcon = when (currentMap) {
+                                GameMap.NEON_CITY -> Icons.Default.LocationCity
+                                GameMap.COASTAL_SUNSET -> Icons.Default.WbSunny
+                                GameMap.STUNT_DISTRICT -> Icons.Default.SportsScore
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(mapColor),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(mapIcon, contentDescription = null, tint = Color.Black, modifier = Modifier.size(24.dp))
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "MAPA: ",
+                                        color = mapColor,
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 10.sp,
+                                        letterSpacing = 1.sp
+                                    )
+                                    Text(
+                                        text = currentMap.title,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                                Text(
+                                    text = currentMap.subtitle,
+                                    color = Color.Gray,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
+                        Button(
+                            onClick = { showMapDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF282F45)),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.testTag("change_map_button")
+                        ) {
+                            Icon(Icons.Default.Map, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(text = "CAMBIAR", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        }
+                    }
+                }
             }
 
             // RIGHT COLUMN: Game Modes Grid
@@ -248,6 +327,132 @@ fun MainMenuScreen(
                     accentColor = Color(0xFFFFD600),
                     onClick = { onSelectMode(GameMode.DRIFT_MASTER) }
                 )
+            }
+        }
+
+        // Map Selection Dialog
+        if (showMapDialog) {
+            androidx.compose.ui.window.Dialog(onDismissRequest = { showMapDialog = false }) {
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF141724)),
+                    modifier = Modifier
+                        .fillMaxWidth(0.92f)
+                        .padding(8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "SELECCIONA TU MAPA",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 18.sp
+                                )
+                                Text(
+                                    text = "Elige la ambientación y trazado de calles para correr",
+                                    color = Color(0xFF00E5FF),
+                                    fontSize = 11.sp
+                                )
+                            }
+                            IconButton(
+                                onClick = { showMapDialog = false },
+                                modifier = Modifier.testTag("close_map_dialog")
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = Color.LightGray)
+                            }
+                        }
+
+                        // 3 Maps Cards
+                        GameMap.entries.forEach { mapItem ->
+                            val isSelected = currentMap == mapItem
+                            val itemColor = when (mapItem) {
+                                GameMap.NEON_CITY -> Color(0xFF00E5FF)
+                                GameMap.COASTAL_SUNSET -> Color(0xFFFF9800)
+                                GameMap.STUNT_DISTRICT -> Color(0xFF76FF03)
+                            }
+                            val itemIcon = when (mapItem) {
+                                GameMap.NEON_CITY -> Icons.Default.LocationCity
+                                GameMap.COASTAL_SUNSET -> Icons.Default.WbSunny
+                                GameMap.STUNT_DISTRICT -> Icons.Default.SportsScore
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = if (isSelected) Color(0xFF1E2438) else Color(0xFF12141C),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    2.dp,
+                                    if (isSelected) itemColor else Color(0xFF242838)
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        currentMap = mapItem
+                                        prefs.selectedMap = mapItem
+                                        showMapDialog = false
+                                    }
+                                    .testTag("select_map_${mapItem.id}")
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(itemColor),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(itemIcon, contentDescription = null, tint = Color.Black, modifier = Modifier.size(24.dp))
+                                    }
+
+                                    Spacer(modifier = Modifier.width(12.dp))
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = mapItem.title,
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp
+                                            )
+                                            if (isSelected) {
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = itemColor
+                                                ) {
+                                                    Text(
+                                                        text = "ACTIVO",
+                                                        color = Color.Black,
+                                                        fontWeight = FontWeight.Black,
+                                                        fontSize = 9.sp,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = mapItem.description,
+                                            color = Color.LightGray,
+                                            fontSize = 11.sp,
+                                            lineHeight = 14.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

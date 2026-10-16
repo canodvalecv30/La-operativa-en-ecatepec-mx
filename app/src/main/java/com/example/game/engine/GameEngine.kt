@@ -28,7 +28,9 @@ class GameEngine(
 
     val characterPhysics = CharacterPhysics()
 
-    val trackWorld = TrackWorld(mode)
+    var activeMap by mutableStateOf(prefs.selectedMap)
+
+    var trackWorld = TrackWorld(mode, activeMap)
 
     // State: Driving or On-Foot
     var isOnFoot by mutableStateOf(false)
@@ -45,7 +47,8 @@ class GameEngine(
         getCarDecalColor = { prefs.getCarDecalColor(carSpec.id) },
         getCarRimColor = { prefs.getCarRimColor(carSpec.id) },
         getCarCaliperColor = { prefs.getCarCaliperColor(carSpec.id) },
-        getCharacterSkin = { prefs.characterSkin }
+        getCharacterSkin = { prefs.characterSkin },
+        getMap = { activeMap }
     )
 
     // Vehicle Driving Inputs
@@ -148,6 +151,14 @@ class GameEngine(
                 }
             }
 
+            // Update world pedestrians & cross streets when on foot
+            val onFootNotice = trackWorld.update(carPhysics, characterPhysics, true, dt)
+            if (onFootNotice != null) {
+                currentEventNotice = onFootNotice
+                noticeClearTime = System.currentTimeMillis() + 2500
+                audio.vibrate(50)
+            }
+
             currentSpeedKmH = if (characterPhysics.isMoving) (if (characterPhysics.isSprinting) 18f else 9f) else 0f
             distanceMeters = characterPhysics.posZ
         } else {
@@ -164,8 +175,8 @@ class GameEngine(
                 isOffRoad = isOffRoad
             )
 
-            // Update track world, collisions, traffic
-            val notice = trackWorld.update(carPhysics, dt)
+            // Update track world, collisions, traffic, pedestrians, cross streets
+            val notice = trackWorld.update(carPhysics, characterPhysics, false, dt)
             if (notice != null) {
                 currentEventNotice = notice
                 noticeClearTime = System.currentTimeMillis() + 1800
@@ -273,6 +284,19 @@ class GameEngine(
 
     fun resume() {
         isPaused = false
+    }
+
+    fun changeMap(newMap: GameMap) {
+        prefs.selectedMap = newMap
+        activeMap = newMap
+        trackWorld = TrackWorld(mode, newMap)
+        resetCarPosition()
+        currentEventNotice = EventNotice(
+            type = EventNoticeType.CLOSE_CALL,
+            text = "¡MAPA CARGADO: ${newMap.title.uppercase()}!",
+            points = 50
+        )
+        noticeClearTime = System.currentTimeMillis() + 2500
     }
 
     fun endGame() {

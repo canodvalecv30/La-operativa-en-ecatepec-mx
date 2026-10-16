@@ -21,7 +21,7 @@ data class Particle(
 )
 
 class ParticleSystem {
-    private val maxParticles = 60
+    private val maxParticles = 120
     private val particles = ArrayList<Particle>(maxParticles)
     private val particleBox = MeshBuilder.createBox(0.25f, 0.25f, 0.25f, 1f, 1f, 1f, 1f)
 
@@ -61,6 +61,68 @@ class ParticleSystem {
                     alpha = 1.0f,
                     life = 0f,
                     maxLife = 0.35f
+                )
+            )
+        }
+    }
+
+    fun emitMuzzleFlash(x: Float, y: Float, z: Float, r: Float = 1.0f, g: Float = 0.85f, b: Float = 0.2f) {
+        for (i in 0 until 4) {
+            if (particles.size >= maxParticles) break
+            particles.add(
+                Particle(
+                    posX = x + (Random.nextFloat() - 0.5f) * 0.1f,
+                    posY = y + (Random.nextFloat() - 0.5f) * 0.1f,
+                    posZ = z + (Random.nextFloat() - 0.5f) * 0.1f,
+                    vx = (Random.nextFloat() - 0.5f) * 2f,
+                    vy = (Random.nextFloat() - 0.5f) * 2f,
+                    vz = Random.nextFloat() * 4f + 2f,
+                    size = 0.35f,
+                    r = r, g = g, b = b,
+                    alpha = 1.0f,
+                    life = 0f,
+                    maxLife = 0.12f
+                )
+            )
+        }
+    }
+
+    fun emitBulletImpact(x: Float, y: Float, z: Float, r: Float = 1.0f, g: Float = 0.75f, b: Float = 0.2f) {
+        for (i in 0 until 6) {
+            if (particles.size >= maxParticles) break
+            particles.add(
+                Particle(
+                    posX = x, posY = y, posZ = z,
+                    vx = (Random.nextFloat() - 0.5f) * 8f,
+                    vy = Random.nextFloat() * 6f + 1f,
+                    vz = (Random.nextFloat() - 0.5f) * 8f,
+                    size = 0.18f,
+                    r = r, g = g, b = b,
+                    alpha = 1.0f,
+                    life = 0f,
+                    maxLife = 0.25f
+                )
+            )
+        }
+    }
+
+    fun emitTargetExplosion(x: Float, y: Float, z: Float) {
+        for (i in 0 until 16) {
+            if (particles.size >= maxParticles) break
+            val isFire = i % 2 == 0
+            particles.add(
+                Particle(
+                    posX = x, posY = y, posZ = z,
+                    vx = (Random.nextFloat() - 0.5f) * 14f,
+                    vy = Random.nextFloat() * 12f + 2f,
+                    vz = (Random.nextFloat() - 0.5f) * 14f,
+                    size = if (isFire) 0.45f else 0.25f,
+                    r = if (isFire) 1.0f else 0.2f,
+                    g = if (isFire) 0.55f else 0.85f,
+                    b = if (isFire) 0.1f else 1.0f,
+                    alpha = 1.0f,
+                    life = 0f,
+                    maxLife = 0.45f
                 )
             )
         }

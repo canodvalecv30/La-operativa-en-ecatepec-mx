@@ -34,6 +34,9 @@ class GameAudio(private val context: Context, private val prefs: GamePreferences
     @Volatile var driftIntensity: Float = 0f // 0f to 1f
     @Volatile var nitroActive: Boolean = false
     @Volatile var triggerCrash: Boolean = false
+    @Volatile var triggerGunshot: Boolean = false
+    @Volatile var isPlasmaGun: Boolean = false
+    @Volatile var triggerExplosion: Boolean = false
 
     private val sampleRate = 22050
     private val bufferSize = 1024
@@ -86,6 +89,9 @@ class GameAudio(private val context: Context, private val prefs: GamePreferences
         var phase3 = 0.0
         var currentRpm = 1000f
         var crashFramesRemaining = 0
+        var gunshotFramesRemaining = 0
+        var explosionFramesRemaining = 0
+        var plasmaTonePhase = 0.0
 
         while (isRunning) {
             if (!prefs.soundEnabled) {
@@ -104,6 +110,18 @@ class GameAudio(private val context: Context, private val prefs: GamePreferences
                 crashFramesRemaining = 12 // ~0.5s of impact
                 triggerCrash = false
                 vibrate(120)
+            }
+
+            if (triggerGunshot) {
+                gunshotFramesRemaining = if (isPlasmaGun) 4 else 3
+                triggerGunshot = false
+                vibrate(if (isPlasmaGun) 25 else 45)
+            }
+
+            if (triggerExplosion) {
+                explosionFramesRemaining = 9
+                triggerExplosion = false
+                vibrate(85)
             }
 
             for (i in 0 until bufferSize) {
@@ -143,12 +161,35 @@ class GameAudio(private val context: Context, private val prefs: GamePreferences
                     engineSample = crashNoise
                 }
 
+                // Gunshot synthesis: Sharp transient impulse + sub boom / plasma laser sweep
+                if (gunshotFramesRemaining > 0) {
+                    if (isPlasmaGun) {
+                        plasmaTonePhase += 2.0 * Math.PI * (880.0 - gunshotFramesRemaining * 120.0) * dt
+                        val laserZap = sin(plasmaTonePhase).toFloat() * 0.75f
+                        val laserHiss = (Random.nextFloat() * 2f - 1f) * 0.25f
+                        engineSample += laserZap + laserHiss
+                    } else {
+                        val gunCrack = (Random.nextFloat() * 2f - 1f) * 0.85f
+                        val gunPunch = sin(phase1 * 3.0).toFloat() * 0.45f
+                        engineSample += gunCrack + gunPunch
+                    }
+                }
+
+                // Explosion synthesis: Rumbling low frequency blast + debris noise
+                if (explosionFramesRemaining > 0) {
+                    val boomSub = sin(i * 0.045).toFloat() * 0.7f
+                    val boomRumble = (Random.nextFloat() * 2f - 1f) * 0.55f
+                    engineSample += boomSub + boomRumble
+                }
+
                 // Clamp to Short
                 val clamped = engineSample.coerceIn(-1f, 1f)
                 buffer[i] = (clamped * 30000).toInt().toShort()
             }
 
             if (crashFramesRemaining > 0) crashFramesRemaining--
+            if (gunshotFramesRemaining > 0) gunshotFramesRemaining--
+            if (explosionFramesRemaining > 0) explosionFramesRemaining--
 
             audioTrack?.write(buffer, 0, bufferSize)
         }

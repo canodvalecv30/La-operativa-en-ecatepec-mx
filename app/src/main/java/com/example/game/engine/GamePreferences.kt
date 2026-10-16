@@ -10,6 +10,98 @@ enum class GameMode(val title: String, val description: String) {
     DRIFT_MASTER("Maestro del Derrape", "Consigue la máxima puntuación encadenando derrapes.")
 }
 
+enum class GameMap(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val description: String,
+    val fogColor: FloatArray,
+    val lightPos: FloatArray,
+    val sunColor: FloatArray,
+    val roadColor: FloatArray,
+    val shoulderColor: FloatArray
+) {
+    NEON_CITY(
+        id = "neon_city",
+        title = "Metrópolis Neón",
+        subtitle = "Downtown & Rascacielos Nocturnos",
+        description = "Avenida metropolitana con rascacielos iluminados, semáforos, pasos de cebra y aceras concurridas.",
+        fogColor = floatArrayOf(0.08f, 0.10f, 0.16f),
+        lightPos = floatArrayOf(20f, 60f, 40f),
+        sunColor = floatArrayOf(1.0f, 0.95f, 0.70f),
+        roadColor = floatArrayOf(0.16f, 0.16f, 0.18f),
+        shoulderColor = floatArrayOf(0.95f, 0.80f, 0.10f)
+    ),
+    COASTAL_SUNSET(
+        id = "coastal_sunset",
+        title = "Paseo Costero & Cañón",
+        subtitle = "Puesta de Sol sobre el Océano",
+        description = "Paseo marítimo paradisíaco con vista al océano turquesa, playas doradas, palmeras y acantilados al atardecer.",
+        fogColor = floatArrayOf(0.38f, 0.22f, 0.20f),
+        lightPos = floatArrayOf(35f, 30f, 50f),
+        sunColor = floatArrayOf(1.0f, 0.60f, 0.25f),
+        roadColor = floatArrayOf(0.22f, 0.22f, 0.24f),
+        shoulderColor = floatArrayOf(1.00f, 0.55f, 0.10f)
+    ),
+    STUNT_DISTRICT(
+        id = "stunt_district",
+        title = "Distrito Industrial & Rampas",
+        subtitle = "Complejo Portuario y Acrobacias",
+        description = "Zona portuaria con cruces de contenedores marítimos multicolores, mega rampas acrobáticas, grúas y loopings.",
+        fogColor = floatArrayOf(0.14f, 0.14f, 0.18f),
+        lightPos = floatArrayOf(15f, 55f, 35f),
+        sunColor = floatArrayOf(0.95f, 0.88f, 0.70f),
+        roadColor = floatArrayOf(0.18f, 0.18f, 0.20f),
+        shoulderColor = floatArrayOf(0.95f, 0.20f, 0.20f)
+    )
+}
+
+enum class WeaponType(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val maxAmmo: Int,
+    val damage: Int,
+    val fireRateSeconds: Float,
+    val bulletSpeed: Float,
+    val projectileColor: Long,
+    val isFullAuto: Boolean
+) {
+    TACTICAL_PISTOL(
+        id = "pistol_9mm",
+        title = "Pistola Táctica 9mm",
+        subtitle = "Semiautomática precisa y de rápida cadencia",
+        maxAmmo = 15,
+        damage = 45,
+        fireRateSeconds = 0.18f,
+        bulletSpeed = 175f,
+        projectileColor = 0xFFFFD700,
+        isFullAuto = false
+    ),
+    PLASMA_BLASTER(
+        id = "blaster_plasma",
+        title = "Blaster de Plasma Cyber",
+        subtitle = "Ráfagas ionizadas de alta energía cyan",
+        maxAmmo = 24,
+        damage = 65,
+        fireRateSeconds = 0.13f,
+        bulletSpeed = 205f,
+        projectileColor = 0xFF00E5FF,
+        isFullAuto = true
+    ),
+    MAGNUM_HEAVY(
+        id = "magnum_44",
+        title = "Magnum .44 Cañón Pesado",
+        subtitle = "Potencia demoledora con proyectiles de tungsteno",
+        maxAmmo = 6,
+        damage = 130,
+        fireRateSeconds = 0.45f,
+        bulletSpeed = 240f,
+        projectileColor = 0xFFFF3D00,
+        isFullAuto = false
+    )
+}
+
 enum class SteeringType {
     BUTTONS,
     STEERING_WHEEL,
@@ -312,4 +404,18 @@ class GamePreferences(context: Context) {
     var bloomEnabled: Boolean
         get() = prefs.getBoolean("bloom_enabled", true)
         set(value) = prefs.edit().putBoolean("bloom_enabled", value).apply()
+
+    var selectedMap: GameMap
+        get() {
+            val name = prefs.getString("selected_map", GameMap.NEON_CITY.name)
+            return try { GameMap.valueOf(name ?: GameMap.NEON_CITY.name) } catch (e: Exception) { GameMap.NEON_CITY }
+        }
+        set(value) = prefs.edit().putString("selected_map", value.name).apply()
+
+    var selectedWeapon: WeaponType
+        get() {
+            val name = prefs.getString("selected_weapon", WeaponType.TACTICAL_PISTOL.name)
+            return try { WeaponType.valueOf(name ?: WeaponType.TACTICAL_PISTOL.name) } catch (e: Exception) { WeaponType.TACTICAL_PISTOL }
+        }
+        set(value) = prefs.edit().putString("selected_weapon", value.name).apply()
 }
